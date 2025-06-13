@@ -2,7 +2,6 @@
 
 import os
 import logging
-import subprocess
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 
