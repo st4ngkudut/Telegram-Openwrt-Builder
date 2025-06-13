@@ -18,17 +18,14 @@ API_ID = 12345678 # GANTI DENGAN API_ID ANDA (harus integer, bukan string)
 API_HASH = "GANTI_DENGAN_API_HASH_ANDA"
 
 # --- Pengaturan OpenWrt Default ---
-# Nilai-nilai ini akan menjadi default saat bot pertama kali dijalankan
-# atau jika file state.json tidak ada.
 OPENWRT_DEFAULTS = {
-    "VERSION": "24.10.1",
-    "TARGET": "x86",
-    "SUBTARGET": "64",
-    "DEVICE_PROFILE": "generic",
-    "CUSTOM_PACKAGES": "luci nano kmod-usb-net-rndis",
-    "OUTPUT_DIR": "FIRMWARE_BUILDS",
+    "VERSION": "23.05.3",
+    "TARGET": "ramips",
+    "SUBTARGET": "mt7621",
+    "DEVICE_PROFILE": "xiaomi_mi-router-3g",
+    "CUSTOM_PACKAGES": "luci luci-ssl luci-theme-argon luci-app-ddns nano",
     "UPLOAD_FILENAME_CONTAINS": "combined-efi",
-    "ROOTFS_SIZE": "512",
+    "ROOTFS_SIZE": "",
     "LEECH_DESTINATION_ID": "me" 
 }
 
