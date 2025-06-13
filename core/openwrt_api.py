@@ -1,4 +1,4 @@
-# core/openwrt_api.py (Versi Perbaikan dengan Timeout)
+# core/openwrt_api.py
 
 import os
 import logging
@@ -11,14 +11,10 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# Cache untuk menyimpan data agar tidak scrape berulang kali
 version_cache = None
 target_cache = {}
 
-# --- FUNGSI-FUNGSI DENGAN PENAMBAHAN TIMEOUT ---
-
 async def scrape_openwrt_versions():
-    """Mengambil dan mem-parsing versi dari situs OpenWrt."""
     global version_cache
     if version_cache:
         return version_cache
@@ -26,7 +22,6 @@ async def scrape_openwrt_versions():
     versions = defaultdict(list)
     url = "https://downloads.openwrt.org/releases/"
     try:
-        # Menambahkan timeout 30 detik
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url)
             response.raise_for_status()
@@ -52,14 +47,12 @@ async def scrape_openwrt_versions():
         return None
 
 async def scrape_targets_for_version(version):
-    """Mengambil daftar TARGET yang valid untuk versi tertentu."""
     if version in target_cache:
         return target_cache[version]
 
     targets = []
     url = f"https://downloads.openwrt.org/releases/{version}/targets/"
     try:
-        # Menambahkan timeout 30 detik
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url)
             response.raise_for_status()
@@ -80,11 +73,9 @@ async def scrape_targets_for_version(version):
         return None
 
 async def scrape_subtargets_for_target(version, target):
-    """Mengambil daftar SUBTARGET yang valid."""
     subtargets = []
     url = f"https://downloads.openwrt.org/releases/{version}/targets/{target}/"
     try:
-        # Menambahkan timeout 30 detik
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url)
             response.raise_for_status()
@@ -104,10 +95,8 @@ async def scrape_subtargets_for_target(version, target):
         return None
         
 async def find_imagebuilder_url_and_name(version, target, subtarget):
-    """Mencari URL dan nama file Image Builder yang benar."""
     base_url = f"https://downloads.openwrt.org/releases/{version}/targets/{target}/{subtarget}/"
     try:
-        # Menambahkan timeout 30 detik
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(base_url)
             response.raise_for_status()
@@ -128,7 +117,6 @@ async def find_imagebuilder_url_and_name(version, target, subtarget):
         return None, None
 
 async def get_device_profiles(ib_dir):
-    """Menjalankan 'make info' dan mem-parsing output untuk mendapatkan daftar profil."""
     if not os.path.isdir(ib_dir):
         logger.error(f"Direktori Image Builder tidak ditemukan: {ib_dir}")
         return None
