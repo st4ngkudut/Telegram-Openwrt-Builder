@@ -1,8 +1,5 @@
 # Telegram OpenWrt Builder Bot
 
-![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-
 Sebuah bot Telegram canggih untuk mengelola, mengonfigurasi, dan memulai proses *build* OpenWrt Image Builder secara remote langsung dari chat Telegram. Bot ini dirancang untuk menjadi asisten pribadi Anda dalam membuat *firmware* OpenWrt kustom dengan mudah dan efisien.
 
 ---
@@ -112,4 +109,5 @@ pm2 logs bot-builder
 
 ## 📜 Lisensi
 
-Proyek ini dilisensikan di bawah Lisensi MIT. Lihat file `LICENSE` untuk detailnya.
+![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
