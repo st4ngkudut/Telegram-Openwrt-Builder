@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 
 (
     MENU,
-    AWAITING_PACKAGES, AWAITING_OUTPUT_DIR, AWAITING_ROOTFS_SIZE, AWAITING_LEECH_DEST,
+    AWAITING_PACKAGES, AWAITING_ROOTFS_SIZE, AWAITING_LEECH_DEST,
     SELECT_VERSION_MAJOR, SELECT_VERSION_MINOR,
     SELECT_TARGET, SELECT_SUBTARGET,
     SELECT_PROFILE,
     SELECT_UPLOAD_PATTERN
-) = range(11)
+) = range(10)
 
 
 async def create_main_settings_keyboard():
@@ -38,13 +38,10 @@ async def create_main_settings_keyboard():
         ],
         [
             InlineKeyboardButton("📦 Ubah Paket Kustom", callback_data="settings_packages"),
-            InlineKeyboardButton("📂 Ubah Direktori Output", callback_data="settings_output")
+            InlineKeyboardButton("📄 Pola File Upload", callback_data="settings_filename_pattern")
         ],
         [
-            InlineKeyboardButton("📄 Pola File Upload", callback_data="settings_filename_pattern"),
-            InlineKeyboardButton("🎯 Tujuan Leech", callback_data="settings_leech_dest")
-        ],
-        [
+            InlineKeyboardButton("🎯 Tujuan Leech", callback_data="settings_leech_dest"),
             InlineKeyboardButton("Tutup", callback_data="settings_close")
         ]
     ]
@@ -76,6 +73,7 @@ async def start_settings_conversation(update: Update, context: ContextTypes.DEFA
         except Exception as e:
             logger.warning(f"Gagal edit pesan kembali ke menu utama: {e}")
             await context.bot.send_message(chat_id=update.effective_chat.id, text=message_text, reply_markup=keyboard, parse_mode='Markdown')
+            
     return MENU
 
 @restricted
@@ -84,8 +82,7 @@ async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     route = query.data; bot_config = context.bot_data.get('config', {})
     if route == 'back_to_main_menu': return await start_settings_conversation(update, context)
     if route == 'settings_close': await query.edit_message_text("Mode pengaturan ditutup."); return ConversationHandler.END
-    if route == 'settings_packages': await query.edit_message_text("Silakan kirim daftar paket baru.\nKetik /cancel untuk batal."); return AWAITING_PACKAGES
-    if route == 'settings_output': await query.edit_message_text("Silakan kirim nama direktori output baru.\nKetik /cancel untuk batal."); return AWAITING_OUTPUT_DIR
+    if route == 'settings_packages': await query.edit_message_text("Silakan tempel (paste) daftar paket kustom Anda.\nKetik /cancel untuk batal."); return AWAITING_PACKAGES
     if route == 'settings_rootfs': await query.edit_message_text("Silakan kirim ukuran RootFS baru dalam MB.\nKetik /cancel untuk batal."); return AWAITING_ROOTFS_SIZE
     if route == 'settings_leech_dest': await query.edit_message_text("Silakan kirim ID Grup/Channel atau 'me'.\nKetik /cancel untuk batal."); return AWAITING_LEECH_DEST
     if route == "settings_filename_pattern":
@@ -186,15 +183,10 @@ async def select_upload_pattern_handler(update: Update, context: ContextTypes.DE
     
 @restricted
 async def receive_packages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    bot_config = context.bot_data.get('config', {}); bot_config['CUSTOM_PACKAGES'] = update.message.text; context.bot_data['config'] = bot_config
+    raw_input = update.message.text; sanitized_input = raw_input.replace('\n', ' ').replace('\\', ' '); package_list = sanitized_input.split(' '); unique_packages = list(dict.fromkeys(filter(None, package_list))); final_packages_string = ' '.join(unique_packages)
+    bot_config = context.bot_data.get('config', {}); bot_config['CUSTOM_PACKAGES'] = final_packages_string; context.bot_data['config'] = bot_config
     if 'save_config' in context.bot_data: context.bot_data['save_config'](bot_config)
-    await update.message.reply_text(f"✅ Paket kustom diatur ke:\n`{update.message.text}`", parse_mode='Markdown'); return await start_settings_conversation(update, context)
-
-@restricted
-async def receive_output_dir(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user_input = update.message.text.strip().replace(" ", "_"); bot_config = context.bot_data.get('config', {}); bot_config['OUTPUT_DIR'] = user_input; context.bot_data['config'] = bot_config
-    if 'save_config' in context.bot_data: context.bot_data['save_config'](bot_config)
-    await update.message.reply_text(f"✅ Direktori output diatur ke: `{user_input}`", parse_mode='Markdown'); return await start_settings_conversation(update, context)
+    await update.message.reply_text(f"✅ Paket kustom berhasil diatur dan dinormalkan menjadi:\n\n`{final_packages_string}`", parse_mode='Markdown'); return await start_settings_conversation(update, context)
 
 @restricted
 async def receive_rootfs_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
