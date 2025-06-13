@@ -2,38 +2,24 @@
 
 import os
 import logging
-from functools import wraps
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+import subprocess
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 
-from config import AUTHORIZED_USER_IDS, BUILD_LOG_PATH
+from config import BUILD_LOG_PATH
 from core.build_manager import build_manager
-from .conversation_handlers import setpackages_command, setoutputdir_command
+from .settings_handler import start_settings_conversation
+from .utils import restricted
 
 logger = logging.getLogger(__name__)
-
-def restricted(func):
-    @wraps(func)
-    async def wrapped(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        user_id = update.effective_user.id
-        if update.callback_query:
-            user_id = update.callback_query.from_user.id
-        if user_id not in AUTHORIZED_USER_IDS:
-            if update.callback_query:
-                await update.callback_query.answer("Akses ditolak.", show_alert=True)
-            else:
-                await update.message.reply_text("Maaf, Anda tidak diizinkan menggunakan bot ini.")
-            logger.warning(f"Akses ditolak untuk user ID: {user_id}")
-            return
-        return await func(update, context, *args, **kwargs)
-    return wrapped
 
 @restricted
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     keyboard = [
         [KeyboardButton("/status"), KeyboardButton("/settings")],
-        [KeyboardButton("/build"), KeyboardButton("/getlog")],
+        [KeyboardButton("/build"), KeyboardButton("/cancel")],
+        [KeyboardButton("/getlog")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
     await update.message.reply_html(
@@ -52,10 +38,9 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def build_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if build_manager.status == "Building...":
+    if build_manager.status in ["Building...", "Preparing"]:
         await update.message.reply_text("❌ Proses build lain sedang berjalan.")
         return
-    
     chat_id = update.effective_message.chat_id
     current_config = context.bot_data.get('config', {})
     context.application.job_queue.run_once(
@@ -66,13 +51,23 @@ async def build_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def getlog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if build_manager.status == "Building...":
+        await update.message.reply_text("⚙️ Proses build sedang berjalan. Silakan coba lagi setelah selesai untuk mendapatkan log lengkap.")
+        return
     if os.path.exists(BUILD_LOG_PATH):
         await update.message.reply_document(document=open(BUILD_LOG_PATH, 'rb'))
     else:
         await update.message.reply_text("File log tidak ditemukan.")
 
 @restricted
-async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from .callback_handlers import create_main_settings_keyboard
-    keyboard = await create_main_settings_keyboard()
-    await update.message.reply_text("⚙️ **Menu Pengaturan**\n\nPilih parameter yang ingin diubah:", reply_markup=keyboard, parse_mode='Markdown')
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if build_manager.status != "Building...":
+        await update.message.reply_text("Tidak ada proses build yang sedang berjalan untuk dibatalkan.")
+        return
+    was_cancelled = await build_manager.cancel_current_build()
+    if was_cancelled:
+        await update.message.reply_text("Mengirim sinyal pembatalan ke proses build...")
+    else:
+        await update.message.reply_text("Gagal membatalkan. Mungkin proses sudah selesai.")
+
+settings_command = start_settings_conversation
