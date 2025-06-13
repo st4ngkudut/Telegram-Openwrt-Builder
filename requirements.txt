@@ -2,3 +2,4 @@ python-telegram-bot[job-queue]
 httpx
 beautifulsoup4
 lxml
+telethon
