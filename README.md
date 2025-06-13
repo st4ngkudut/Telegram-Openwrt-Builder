@@ -48,7 +48,7 @@ Sebuah bot Telegram canggih untuk mengelola, mengonfigurasi, dan memulai proses 
 #### 1. Clone Repositori
 ```bash
 git clone (https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git)
-cd [Telegram-Openwrt-Builder]
+cd Telegram-Openwrt-Builder
 ```
 
 #### 2. Instal Dependensi
