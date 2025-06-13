@@ -1,64 +1,47 @@
-# core/build_manager.py (Versi Final dengan Verifikasi Paket)
+# core/build_manager.py
 
 import os
 import shutil
 import asyncio
 import logging
 import time
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+import glob
 from telegram.error import RetryAfter, BadRequest
 
 from config import BUILD_LOG_PATH
 from core.openwrt_api import find_imagebuilder_url_and_name, get_device_profiles
+from core.uploader import upload_file_for_forwarding
 
 logger = logging.getLogger(__name__)
 
-LOG_UPDATE_INTERVAL = 3.0 
+LOG_UPDATE_INTERVAL = 3.0
 
 class BuildManager:
     def __init__(self):
         self.status = "Idle"
         self.ib_dir = None
+        self.process = None
 
-    async def get_available_packages(self, ib_dir):
-        """
-        Membaca dan mem-parsing file Packages.gz untuk mendapatkan daftar semua paket yang tersedia.
-        """
-        package_list = set()
-        packages_path = os.path.join(ib_dir, "packages")
-        if not os.path.isdir(packages_path):
-            return None
-        
-        # Perintah shell untuk dekompresi dan filtering
-        command = f'find {packages_path} -name "Packages.gz" | xargs gunzip -c | grep "Package:"'
-        
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
-
-        if process.returncode != 0:
-            logger.error(f"Gagal membaca daftar paket: {stderr.decode()}")
-            return None
-            
-        for line in stdout.decode().splitlines():
-            # Mengambil nama paket dari baris "Package: nama-paket"
-            package_name = line.split(':')[1].strip()
-            package_list.add(package_name)
-            
-        logger.info(f"Ditemukan {len(package_list)} paket yang tersedia di Image Builder.")
-        return package_list
+    async def cancel_current_build(self):
+        if self.process and self.status == "Building...":
+            try:
+                self.process.terminate()
+                await self.process.wait()
+                self.status = "Cancelled"
+                self.process = None
+                logger.info("Proses build berhasil dibatalkan oleh pengguna.")
+                return True
+            except ProcessLookupError:
+                logger.warning("Mencoba membatalkan proses yang sudah tidak ada.")
+                self.process = None
+                self.status = "Idle"
+                return False
+        return False
 
     async def run_build_task(self, context, chat_id, current_config):
-        """
-        Tugas build dengan verifikasi paket dan profil terlebih dahulu.
-        """
         self.status = "Preparing"
         await context.bot.send_message(chat_id, "Mempersiapkan build...")
         
-        # 1. Temukan, Download, dan Ekstrak
         full_url, ib_filename = await find_imagebuilder_url_and_name(
             current_config["VERSION"], current_config["TARGET"], current_config["SUBTARGET"]
         )
@@ -79,33 +62,7 @@ class BuildManager:
             extract_proc = await asyncio.create_subprocess_shell(extract_command)
             await extract_proc.wait()
             await context.bot.delete_message(chat_id=chat_id, message_id=extract_message.message_id)
-
-        # --- TAHAP VERIFIKASI BARU ---
-        # 2. Verifikasi Paket Kustom
-        self.status = "Verifying Packages"
-        await context.bot.send_message(chat_id, "Memverifikasi daftar paket kustom...")
         
-        available_packages = await self.get_available_packages(self.ib_dir)
-        if available_packages is None:
-            await context.bot.send_message(chat_id, "❌ GAGAL: Tidak bisa membaca repositori paket dari Image Builder."); self.status = "Failed"; return
-
-        custom_packages = set(current_config["CUSTOM_PACKAGES"].split())
-        invalid_packages = custom_packages - available_packages
-
-        if invalid_packages:
-            await context.bot.send_message(
-                chat_id,
-                f"❌ **Paket Tidak Valid Ditemukan!**\n\n"
-                f"Paket berikut tidak tersedia untuk rilis ini:\n`{', '.join(invalid_packages)}`\n\n"
-                "Proses build dibatalkan. Silakan perbaiki daftar paket Anda melalui /settings.",
-                parse_mode='Markdown'
-            )
-            self.status = "Failed"
-            return
-        
-        await context.bot.send_message(chat_id, "✅ Semua paket kustom valid.")
-
-        # 3. Verifikasi Profil Perangkat (Logika dari sebelumnya)
         current_profile = current_config["DEVICE_PROFILE"]
         valid_profiles = await get_device_profiles(self.ib_dir)
         if valid_profiles is None:
@@ -113,38 +70,125 @@ class BuildManager:
 
         if current_profile not in valid_profiles:
             self.status = "Awaiting Profile"
-            from handlers.callback_handlers import create_paginated_keyboard
-            keyboard = await create_paginated_keyboard(valid_profiles, 0, "build_with_profile_", back_callback="cancel_build")
+            from handlers.settings_handler import create_paginated_keyboard
+            keyboard = await create_paginated_keyboard(valid_profiles, 0, "p_select_")
             await context.bot.send_message(chat_id, f"⚠️ **Profil `{current_profile}` tidak valid!**\n\nPilih profil yang benar untuk melanjutkan:", reply_markup=keyboard, parse_mode='Markdown')
             return
 
-        # 4. Jika semua valid, lanjutkan build
         self.status = "Building..."
-        progress_message = await context.bot.send_message(chat_id, f"✅ Konfigurasi valid. Memulai build...\n\n```\nLog akan muncul di sini...\n```", parse_mode='Markdown')
-        # ... (sisa logika real-time logging tidak berubah) ...
-        message_id = progress_message.message_id; command = (f"make -C {self.ib_dir} image PROFILE={current_profile} PACKAGES='{current_config['CUSTOM_PACKAGES']}' V=s"); process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT); log_content = ""; last_update_time = time.time()
-        while True:
-            line = await process.stdout.readline();
-            if not line: break;
-            decoded_line = line.decode('utf-8', errors='ignore').strip()
-            if decoded_line: log_content += decoded_line + "\n";
+        
+        rootfs_size = str(current_config.get("ROOTFS_SIZE", "")).strip()
+        env_prefix = ""
+        if rootfs_size and rootfs_size.isdigit() and int(rootfs_size) > 0:
+            env_prefix = f"ROOTFS_PART_SIZE={rootfs_size}m "
+            await context.bot.send_message(chat_id, f"💡 Menggunakan ukuran RootFS kustom: {rootfs_size}MB")
+
+        command = (
+            f"{env_prefix}make -C {self.ib_dir} image "
+            f"PROFILE={current_config['DEVICE_PROFILE']} "
+            f"PACKAGES='{current_config['CUSTOM_PACKAGES']}' V=s"
+        )
+
+        progress_message = await context.bot.send_message(
+            chat_id,
+            f"✅ Konfigurasi valid. Memulai build...\n\nPerintah `/cancel` tersedia untuk membatalkan.\n\n```\nLog akan muncul di sini...\n```",
+            parse_mode='Markdown'
+        )
+        logger.info(f"Executing command: {command}")
+        
+        message_id = progress_message.message_id
+        self.process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        log_content = ""
+        last_update_time = time.time()
+        
+        while self.process.returncode is None:
+            try:
+                line = await asyncio.wait_for(self.process.stdout.readline(), timeout=1.0)
+                if not line: break
+                decoded_line = line.decode('utf-8', errors='ignore').strip()
+                if decoded_line: log_content += decoded_line + "\n"
+            except asyncio.TimeoutError:
+                continue
+
             if (time.time() - last_update_time) > LOG_UPDATE_INTERVAL:
                 try:
-                    display_log = "..." + log_content[-3800:] if len(log_content) > 3800 else log_content
-                    if display_log.strip() != (await context.bot.get_chat(chat_id=chat_id).description or "").strip():
-                        await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"```\n{display_log}```", parse_mode='Markdown')
+                    log_lines = log_content.strip().split('\n')
+                    last_15_lines = log_lines[-15:]
+                    display_log = '\n'.join(last_15_lines)
+                    
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id, 
+                        message_id=message_id, 
+                        text=f"```\n{display_log}\n```", 
+                        parse_mode='Markdown'
+                    )
                     last_update_time = time.time()
-                except (RetryAfter, BadRequest): pass
-        await process.wait()
+                except (RetryAfter, BadRequest):
+                    pass
+        
+        await self.process.wait()
+        return_code = self.process.returncode
+        self.process = None
+        
         final_log = "..." + log_content[-3800:] if len(log_content) > 3800 else log_content
-        if process.returncode == 0:
-            self.status = "Success"; await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"```\n{final_log}\n```\n✅ **Build Selesai!**", parse_mode='Markdown'); await self.send_firmware(context, chat_id, current_config, self.ib_dir)
+
+        if self.status == "Cancelled":
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text="🛑 **Build Dibatalkan oleh Pengguna.**")
+        elif return_code == 0:
+            self.status = "Success"
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"```\n{final_log}\n```\n✅ **Build Selesai!**", parse_mode='Markdown')
+            await self.send_firmware(context, chat_id, current_config, self.ib_dir)
         else:
-            self.status = "Failed"; await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"```\n{final_log}\n```\n❌ **Build GAGAL!** Kode error: {process.returncode}", parse_mode='Markdown')
+            self.status = "Failed"
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"```\n{final_log}\n```\n❌ **Build GAGAL!** Kode error: {return_code}", parse_mode='Markdown')
+        
         with open(BUILD_LOG_PATH, "w") as f: f.write(log_content)
 
     async def send_firmware(self, context, chat_id, config, ib_dir):
-        # ... (Fungsi ini tidak diubah) ...
-        pass
+        try:
+            keyword = config.get("UPLOAD_FILENAME_CONTAINS", "combined-efi")
+            search_pattern = f"**/*{keyword}*.img.gz"
+            search_path = os.path.join(ib_dir, 'bin/targets', search_pattern)
+            firmware_files = glob.glob(search_path, recursive=True)
+
+            if not firmware_files:
+                await context.bot.send_message(chat_id, f"🤔 Gagal menemukan file `.img.gz` yang mengandung kata kunci `{keyword}`.")
+                return
+
+            latest_file = max(firmware_files, key=os.path.getmtime)
+            file_name = os.path.basename(latest_file)
+            file_size_mb = os.path.getsize(latest_file) / (1024 * 1024)
+
+            status_message = await context.bot.send_message(
+                chat_id,
+                f"✔️ Menemukan file: `{file_name}` ({file_size_mb:.2f} MB).\nMempersiapkan pengiriman..."
+            )
+
+            leech_destination = config.get("LEECH_DESTINATION_ID", "me")
+
+            uploaded_message = await upload_file_for_forwarding(
+                file_path=latest_file,
+                destination_id=leech_destination,
+                status_message=status_message
+            )
+
+            if uploaded_message:
+                try:
+                    await context.bot.forward_message(
+                        chat_id=chat_id,
+                        from_chat_id=uploaded_message.chat_id,
+                        message_id=uploaded_message.id
+                    )
+                    logger.info(f"Berhasil me-forward file dari {leech_destination} ke pengguna.")
+                    await status_message.delete()
+                except Exception as e:
+                    logger.error(f"Gagal me-forward pesan: {e}")
+                    await status_message.edit_text(f"❌ Gagal me-forward file.\nError: {e}")
+            else:
+                logger.error("Gagal mendapatkan pesan yang diunggah dari Telethon.")
+
+        except Exception as e:
+            logger.error(f"Gagal dalam proses pengiriman firmware: {e}")
+            await context.bot.send_message(chat_id, f"Terjadi kesalahan saat mengirim file: {e}")
 
 build_manager = BuildManager()
