@@ -46,7 +46,6 @@ from handlers.settings_handler import (
     select_profile_handler,
     cancel_conversation
 )
-# Impor fungsi baru
 from handlers.utils import send_temporary_message
 
 logging.basicConfig(
@@ -82,7 +81,6 @@ async def _show_history_page(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     if not history:
         await send_temporary_message(context, chat_id, "Arsip build Anda masih kosong.")
-        # Hapus pesan menu jika ada (dari navigasi)
         if update.callback_query:
             await update.callback_query.message.delete()
         return
@@ -103,7 +101,6 @@ async def _show_history_page(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if end_index < len(history): nav_row.append(InlineKeyboardButton("Berikutnya »", callback_data=f"{mode}_page_{page + 1}"))
     if nav_row: keyboard.append(nav_row)
     
-    # Tambahkan tombol tutup untuk menu utama
     keyboard.append([InlineKeyboardButton("Tutup Menu", callback_data="action_close")])
 
     if update.message: 
@@ -185,7 +182,7 @@ async def cleanup_action_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
     _, action, build_id = query.data.split('_')
     
-    text_to_send = "" # Siapkan pesan konfirmasi
+    text_to_send = "" 
     if action == 'del-res':
         if remove_build_entry(build_id):
             text_to_send = "✅ Hasil compile dan catatannya telah dihapus dari arsip."
@@ -205,7 +202,6 @@ async def cleanup_action_callback(update: Update, context: ContextTypes.DEFAULT_
         else:
             text_to_send = "❌ Gagal menghapus direktori atau path tidak ditemukan."
 
-    # Hapus menu sebelumnya dan kirim pesan temporer
     await query.message.delete()
     await send_temporary_message(context, update.effective_chat.id, text_to_send)
 
@@ -247,7 +243,6 @@ async def main() -> None:
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
     
     if os.path.exists('state.json'):
-        # ... (logika load state.json tetap sama) ...
         try:
             with open('state.json', 'r') as f: user_config = json.load(f)
             base_config = config.OPENWRT_DEFAULTS.copy()
@@ -294,7 +289,6 @@ async def main() -> None:
     application.add_handler(CallbackQueryHandler(history_menu_callback, pattern="^(arsip|cleanup)_page_"))
     application.add_handler(CallbackQueryHandler(archive_download_callback, pattern="^arsip_dl_"))
     application.add_handler(CallbackQueryHandler(cleanup_action_callback, pattern="^cleanup_del-"))
-    # Handler baru untuk tombol tutup
     application.add_handler(CallbackQueryHandler(close_message_callback, pattern="^action_close$"))
 
     
