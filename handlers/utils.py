@@ -31,7 +31,6 @@ def restricted(func):
         return await func(update, context, *args, **kwargs)
     return wrapped
 
-# --- FUNGSI BARU UNTUK PESAN TEMPORER ---
 async def delete_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Tugas yang dijadwalkan untuk menghapus pesan."""
     try:
@@ -40,7 +39,6 @@ async def delete_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             message_id=context.job.data['message_id']
         )
     except BadRequest as e:
-        # Abaikan error jika pesan sudah tidak ditemukan (misalnya, sudah dihapus manual)
         if "Message to delete not found" not in str(e):
             logger.warning(f"Gagal menghapus pesan terjadwal: {e}")
 
@@ -52,7 +50,6 @@ async def send_temporary_message(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             text=text,
             **kwargs
         )
-        # Jadwalkan penghapusan pesan
         context.job_queue.run_once(
             delete_message_job,
             TEMP_MESSAGE_DURATION,
