@@ -42,6 +42,17 @@ Sebuah bot Telegram canggih untuk mengelola, mengonfigurasi, dan memulai proses 
 
 ## 🚀 Persiapan & Instalasi
 
+#### Update & Install dependencies
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+Lalu
+
+```bash
+sudo apt install build-essential libncurses5-dev libncursesw5-dev \
+zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3
+```
+
 #### 1. Clone Repositori
 ```bash
 git clone https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git
