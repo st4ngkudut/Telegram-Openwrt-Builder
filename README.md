@@ -26,10 +26,12 @@ Sebuah bot Telegram canggih untuk mengelola, mengonfigurasi, dan memulai proses 
 .
 ├── core/
 │   ├── build_manager.py     # Logika inti untuk proses build
+│   ├── history_manager.py   # Fungsi untuk menyimpan history bot
 │   ├── openwrt_api.py       # Fungsi untuk scraping data OpenWrt
 │   └── uploader.py          # Modul uploader file besar via Telethon
 ├── handlers/
 │   ├── command_handlers.py  # Handler untuk perintah utama (/start, /build)
+│   ├── constant.py          # Handler untuk tombol menu
 │   ├── settings_handler.py  # Handler untuk percakapan menu /settings
 │   └── utils.py             # Fungsi utilitas (e.g., decorator @restricted)
 ├── config.py                # Semua konfigurasi terpusat
