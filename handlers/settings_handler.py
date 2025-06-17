@@ -133,11 +133,9 @@ async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await query.edit_message_text(f"Pilih Target untuk v{version} (Hal 1):", reply_markup=keyboard)
         return SELECT_TARGET
     
-    # --- PERBAIKAN LOGIKA 'UBAH PROFIL' DI SINI ---
     if route == "settings_profile":
         await query.edit_message_text("Mengecek direktori Image Builder...")
         
-        # Tentukan path direktori IB dari konfigurasi saat ini
         _, ib_filename = await find_imagebuilder_url_and_name(
             bot_config.get("VERSION"), bot_config.get("TARGET"), bot_config.get("SUBTARGET")
         )
@@ -148,7 +146,6 @@ async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
         ib_dir = ib_filename.replace(".tar.xz", "").replace(".tar.zst", "")
         
-        # Periksa apakah direktori tersebut sudah ada
         if not os.path.isdir(ib_dir):
             await query.edit_message_text(
                 "Image Builder untuk konfigurasi ini belum diunduh. Jalankan `/build` sekali untuk mengunduhnya.",
@@ -156,13 +153,12 @@ async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             )
             return MENU
         
-        # Jika ada, lanjutkan untuk mendapatkan profil
         profiles = await get_device_profiles(ib_dir)
         if not profiles:
             await query.edit_message_text("Gagal mendapatkan daftar profil dari direktori yang ada.")
             return await start_settings_conversation(update, context)
             
-        context.user_data['current_ib_dir'] = ib_dir # Simpan path untuk digunakan oleh paginasi
+        context.user_data['current_ib_dir'] = ib_dir
         
         keyboard = await create_paginated_keyboard(profiles, 0, "p_select_")
         await query.edit_message_text("Pilih Profil Perangkat (Hal 1):", reply_markup=keyboard)
@@ -177,14 +173,11 @@ async def select_profile_handler(update: Update, context: ContextTypes.DEFAULT_T
     bot_config = context.bot_data.get('config', {})
     data = query.data
 
-    # --- PERBAIKAN LOGIKA PAGINASI PROFIL DI SINI ---
     if data.startswith("p_select_page_"):
         page = int(data.split('_')[-1])
         
-        # Ambil path direktori dari user_data yang disimpan sebelumnya
         ib_dir = context.user_data.get('current_ib_dir')
         if not ib_dir or not os.path.isdir(ib_dir):
-            # Fallback jika data tidak ada, coba tentukan ulang
             await query.edit_message_text("Sesi kedaluwarsa, silakan ulangi dari menu Pengaturan.")
             return await start_settings_conversation(update, context)
 
@@ -197,21 +190,17 @@ async def select_profile_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text(f"Pilih Profil Perangkat (Halaman {page + 1}):", reply_markup=keyboard)
         return SELECT_PROFILE
     else:
-        # Bagian ini untuk saat profil sudah dipilih
         profile = data.replace("p_select_", "")
         bot_config["DEVICE_PROFILE"] = profile
         context.bot_data['config'] = bot_config
         if 'save_config' in context.bot_data:
             context.bot_data['save_config'](bot_config)
         
-        # Hapus data direktori dari sesi setelah selesai
         if 'current_ib_dir' in context.user_data:
             del context.user_data['current_ib_dir']
 
         await query.edit_message_text(f"✅ Profil diatur ke: *{profile}*", parse_mode='Markdown')
         return await start_settings_conversation(update, context)
-
-# ... (sisa fungsi handler lainnya tetap sama persis seperti versi final sebelumnya) ...
 
 @restricted
 async def select_version_major_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
