@@ -44,7 +44,7 @@ Sebuah bot Telegram canggih untuk mengelola, mengonfigurasi, dan memulai proses 
 
 #### Update & Install dependencies
 ```bash
-sudo apt update && sudo apt upgrade -y
+sudo apt update && sudo apt upgrade -y && sudo apt-get install -y $(curl -fsSL https://raw.githubusercontent.com/ophub/amlogic-s9xxx-armbian/main/compile-kernel/tools/script/ubuntu2004-openwrt-depends)
 ```
 Lalu
 
