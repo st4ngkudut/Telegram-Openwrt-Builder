@@ -52,7 +52,7 @@ Lalu
 
 ```bash
 sudo apt install build-essential libncurses5-dev libncursesw5-dev \
-zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 -y
+zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-pip -y
 ```
 
 #### 1. Clone Repositori
