@@ -240,6 +240,26 @@ async def close_message_callback(update: Update, context: ContextTypes.DEFAULT_T
     await query.message.delete()
 
 async def main() -> None:
+    logger.info("Memulai pengecekan sesi Telethon...")
+    telethon_client = TelegramClient('telegram_user_session', config.API_ID, config.API_HASH)
+    try:
+        await telethon_client.start()
+        me = await telethon_client.get_me()
+        logger.info(f"Pengecekan sesi Telethon berhasil. Login sebagai: {me.first_name}")
+        await telethon_client.disconnect()
+        logger.info("Koneksi Telethon untuk pengecekan ditutup.")
+    except Exception as e:
+        logger.error(f"Gagal melakukan pengecekan sesi Telethon: {e}")
+        print(f"\n!!! GAGAL MENGHUBUNGKAN TELETHON: {e} !!!")
+        print("Pastikan API_ID, API_HASH, dan input login (nomor telp/kode) sudah benar.")
+        print("Fitur upload file besar mungkin tidak akan berjalan. Bot akan berhenti.")
+        if telethon_client.is_connected():
+            await telethon_client.disconnect()
+        return
+    
+    logger.info("="*30)
+    logger.info("MEMULAI BOT")
+    logger.info("="*30)
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
     
     if os.path.exists('state.json'):
