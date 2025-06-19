@@ -21,10 +21,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
     stang_url = "https://t.me/ST4NGKUDUT"
-    github_url = "https://github.com/st4ngkudut/Telegram-Openwrt-Builder/tree/main"
+    github_url = "https://github.com/st4ngkudut/Telegram-Openwrt-Builder"
     
     message_text = (
-        "👋 <b>Selamat Datang di Bot OpenWrt Builder!</b>\n\n"
+        "👋 <b>Selamat Datang di ST4-Bot OpenWrt Builder!</b>\n\n"
         "Asisten pribadi Anda untuk membuat firmware OpenWrt khusus dengan mudah dan cepat.\n\n"
         "<b>Fitur Utama:</b>\n"
         "🔧 <code>/build</code> - Memulai proses build interaktif.\n"
