@@ -162,10 +162,10 @@ async def handle_upload_selection(update: Update, context: ContextTypes.DEFAULT_
         data_part = query.data.replace('upload_choice_', ''); build_id, file_index_str = data_part.rsplit('_', 1)
         file_index = int(file_index_str); history = load_history()
         selected_build = next((item for item in history if item['id'] == build_id), None)
-        if not selected_build: await query.message.edit_text("❌ Error: Catatan build tidak ditemukan."); return
+        if not selected_build: await query.message.edit_message_text("❌ Error: Catatan build tidak ditemukan."); return
         firmware_dict = selected_build.get('firmware_files', {})
         firmware_paths = sorted(list(firmware_dict.values()))
-        if not firmware_dict or file_index >= len(firmware_paths): await query.message.edit_text("❌ Error: Indeks file tidak valid."); return
+        if not firmware_dict or file_index >= len(firmware_paths): await query.message.edit_message_text("❌ Error: Indeks file tidak valid."); return
         selected_file_path = firmware_paths[file_index]
         if not os.path.exists(selected_file_path): await query.message.edit_message_text("❌ Error: File fisik tidak ditemukan."); return
         await build_manager.perform_upload(context, update.effective_chat.id, selected_file_path, query.message)
@@ -196,7 +196,7 @@ async def handle_build_file_pagination(update: Update, context: ContextTypes.DEF
     if nav_row: keyboard.append(nav_row)
     if selected_build.get('build_mode') == 'official' and any("rootfs" in f for f in firmware_files):
         keyboard.append([InlineKeyboardButton("➡️ Lanjutkan ke Amlogic Remake", callback_data=f"chain_relic_{build_id}")])
-    await query.edit_message_text(f"✅ **Build Selesai!** (Hal {page + 1}/{total_pages})\n\nDisimpan ke `/arsip`.\n👇 Pilih file untuk diunggah:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.edit_message_text(f"✅ **Build Selesai!** (Halaman {page + 1}/{total_pages})\n\nDisimpan ke `/arsip`.\n👇 Pilih file untuk diunggah:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def close_message_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await update.callback_query.message.delete()
@@ -227,7 +227,6 @@ async def main() -> None:
             CallbackQueryHandler(start_chain_build, pattern="^arsip_remake_")
         ],
         states={
-            # States untuk /settings
             SELECT_MODE: [CallbackQueryHandler(mode_router, pattern="^mode_")],
             MENU: [CallbackQueryHandler(official_menu_router, pattern="^official_set_"), CallbackQueryHandler(save_and_exit_handler, pattern="^settings_save$")],
             SELECT_BUILD_SOURCE: [CallbackQueryHandler(select_build_source_handler, pattern="^select_source_")],
@@ -250,21 +249,13 @@ async def main() -> None:
             AWAITING_AML_KERNEL_TAG: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_aml_kernel_tag)],
             AWAITING_AML_BUILDER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_aml_builder_name)],
             AWAITING_LEECH_DEST_AML: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_aml_leech_dest)],
-
-            # States untuk /build
             SELECT_BUILD_MODE: [CallbackQueryHandler(select_build_mode_handler, pattern="^build_mode_")],
             CONFIRM_BUILD: [CallbackQueryHandler(confirm_build_handler, pattern="^build_confirm_"), CallbackQueryHandler(request_settings_change_handler, pattern="^build_goto_settings_")],
             AWAITING_PROFILE_FIX: [CallbackQueryHandler(fix_profile_handler, pattern="^build_fix_profile_")],
-
-            # States untuk /upload
             UPLOAD_ROOTFS: [MessageHandler(filters.Document.ALL, handle_rootfs_upload)],
             UPLOAD_IPK: [MessageHandler(filters.Document.ALL, handle_ipk_upload)],
-
-            # States untuk /cleanup all
             CLEANUP_ALL_CONFIRM_1: [CallbackQueryHandler(prompt_for_final_confirmation, pattern="^cleanup_all_confirm_yes$")],
             AWAITING_DELETION_PHRASE: [MessageHandler(filters.Text(config.CONFIRMATION_PHRASE), execute_full_cleanup), MessageHandler(filters.TEXT & ~filters.COMMAND, invalid_confirmation_phrase)],
-        
-            # States untuk Build Berantai
             CHAIN_CONFIRM_AML: [CallbackQueryHandler(confirm_chain_build, pattern="^chain_confirm_start$"), CallbackQueryHandler(chain_goto_settings, pattern="^chain_goto_settings$")]
         },
         fallbacks=[
@@ -277,7 +268,6 @@ async def main() -> None:
         conversation_timeout=600, per_user=True, per_chat=True, allow_reentry=True
     )
     
-    # --- Semua Handler ---
     application.add_handler(master_conv_handler)
     
     application.add_handler(CommandHandler("start", start_command)); application.add_handler(CommandHandler("status", status_command)); application.add_handler(CommandHandler("getlog", getlog_command)); application.add_handler(CommandHandler("cancel", general_cancel_command)); application.add_handler(CommandHandler("arsip", archive_command)); application.add_handler(CommandHandler("cleanup", cleanup_command))
@@ -295,7 +285,5 @@ async def main() -> None:
     while True: await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot dihentikan.")
+    try: asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit): logger.info("Bot dihentikan.")
