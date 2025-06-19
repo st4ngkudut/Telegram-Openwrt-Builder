@@ -55,7 +55,7 @@ sudo npm install -g pm2
 
 **2. Clone Repositori**
 ```bash
-git clone [https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git](https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git)
+git clone https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git
 cd Telegram-Openwrt-Builder
 ```
 
