@@ -1,126 +1,117 @@
-# Telegram OpenWrt Builder Bot
+# Telegram OpenWrt Builder V2
 
-Sebuah bot Telegram canggih untuk mengelola, mengonfigurasi, dan memulai proses *build* OpenWrt Image Builder secara remote langsung dari chat Telegram. Bot ini dirancang untuk menjadi asisten pribadi Anda dalam membuat *firmware* OpenWrt kustom dengan mudah dan efisien.
+Bot Telegram canggih yang berfungsi sebagai 'bengkel kerja' atau *toolchain* pribadi untuk membuat firmware OpenWrt khusus langsung dari Telegram, dengan dukungan untuk build resmi, ImmortalWrt, dan Amlogic Remake.
 
----
-
-## ✨ Fitur Utama
-
-- **Menu Pengaturan Interaktif:** Kontrol semua parameter build melalui menu `/settings` berbasis tombol yang intuitif, tanpa perlu menghafal perintah.
-- **Kustomisasi Build Penuh:**
-    - Pilih Versi, Target, dan Subtarget OpenWrt.
-    - Pilih Profil Perangkat yang spesifik.
-    - Tentukan daftar Paket Kustom yang ingin disertakan.
-    - Atur Ukuran Partisi RootFS secara dinamis.
-- **Metode "Leech & Forward":** File besar diunggah terlebih dahulu ke "Saved Messages" atau grup/channel pribadi.
-- **Kontrol Proses Build:**
-    - `/build`: Memulai proses kompilasi.
-    - `/cancel`: Menghentikan paksa proses `make` yang sedang berjalan.
-    - `/getlog`: Mengambil file log dari build terakhir untuk debugging.
 
 ---
 
-## 🏗️ Struktur Proyek
+## ✨ Daftar Fitur
 
-```
-.
-├── core/
-│   ├── build_manager.py     # Logika inti untuk proses build
-│   ├── history_manager.py   # Fungsi untuk menyimpan history bot
-│   ├── openwrt_api.py       # Fungsi untuk scraping data OpenWrt
-│   └── uploader.py          # Modul uploader file besar via Telethon
-├── handlers/
-│   ├── command_handlers.py  # Handler untuk perintah utama (/start, /build)
-│   ├── constant.py          # Handler untuk tombol menu
-│   ├── settings_handler.py  # Handler untuk percakapan menu /settings
-│   └── utils.py             # Fungsi utilitas (e.g., decorator @restricted)
-├── config.py                # Semua konfigurasi terpusat
-├── main.py                  # Titik masuk utama aplikasi bot
-├── requirements.txt         # Daftar dependensi Python
-└── state.json               # (Dibuat otomatis) Menyimpan state konfigurasi
-```
+### 🤖 Sistem Build Ganda & Interaktif
+- **Build Resmi & ImmortalWrt:** Membuat firmware langsung dari Image Builder resmi OpenWrt atau ImmortalWrt.
+- **Amlogic Remake:** Mengemas ulang `rootfs` untuk perangkat Amlogic menggunakan skrip `ophub/remake`.
+- **Alur Build Interaktif (`/build`):** Percakapan terpandu untuk memulai build, lengkap dengan layar konfirmasi dan validasi profil proaktif untuk mencegah build gagal di tengah jalan.
+
+### ⚙️ Menu Pengaturan Lengkap & Dinamis (`/settings`)
+- **Mode Ganda:** Beralih dengan mudah antara konfigurasi "Build Resmi" dan "Amlogic Remake".
+- **Pemilihan Sumber:** Pilih antara `OpenWrt` dan `ImmortalWrt` sebagai sumber build. Bot akan secara otomatis mengambil data dari server yang benar.
+- **Konfigurasi Mendalam:** Atur Versi, Target, Subtarget, Profil Perangkat, Ukuran RootFS, Paket Kustom, dan lainnya melalui menu tombol yang interaktif.
+
+### 🛠️ Kustomisasi Tingkat Lanjut
+- **Custom Repository per Arsitektur:** Tambahkan repositori paket pihak ketiga yang berbeda untuk setiap arsitektur build (`x86_64`, `ramips`, dll).
+  - Mendukung placeholder `{arch}` untuk URL dinamis.
+  - Opsi `check_signature` dinonaktifkan secara otomatis.
+- **Upload Skrip `uci-defaults`:** Unggah skrip `.sh` untuk melakukan konfigurasi otomatis saat firmware pertama kali di-boot.
+- **Upload Paket `.ipk` Kustom:** Unggah satu atau beberapa file `.ipk` kustom dalam sekali kirim untuk disertakan dalam build.
+- **Upload `rootfs`:** Unggah file `rootfs` untuk Amlogic Remake langsung dari Telegram.
+
+### 🗂️ Manajemen & Utilitas
+- **Arsip Build (`/arsip`):** Semua hasil build tercatat dalam histori, lengkap dengan detail konfigurasinya.
+- **Paginasi:** Daftar file hasil build dan daftar histori di `/arsip` & `/cleanup` memiliki halaman untuk menangani hasil yang banyak tanpa error.
+- **Manajemen File (`/cleanup`):** Hapus entri build satu per satu atau lakukan "sapu bersih" total semua data build dengan konfirmasi berlapis yang aman.
+- **Panel Status Cerdas (`/status`):** Menampilkan panel konfigurasi dan status build saat ini yang selalu ter-update dan bersih.
+- **Log Real-time:** Dapatkan log proses `make` atau `remake` secara langsung di Telegram.
 
 ---
 
-## 🚀 Persiapan & Instalasi
+## 🚀 Instalasi & Konfigurasi
 
-#### Update & Install dependencies
+**1. Prasyarat di Server (Ubuntu/Debian)**
 ```bash
-sudo apt update && sudo apt upgrade -y && sudo apt-get install -y $(curl -fsSL https://raw.githubusercontent.com/ophub/amlogic-s9xxx-armbian/main/compile-kernel/tools/script/ubuntu2004-openwrt-depends)
+sudo apt-get update
+sudo apt-get install -y git python3 python3-pip wget curl build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk flex gettext npm
 ```
-Lalu
-
+Pastikan `pm2` juga terinstal untuk manajemen proses:
 ```bash
-sudo apt install build-essential libncurses5-dev libncursesw5-dev \
-zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-pip -y
+sudo npm install -g pm2
 ```
 
-#### 1. Clone Repositori
+**2. Clone Repositori**
 ```bash
-git clone https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git
+git clone [https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git](https://github.com/st4ngkudut/Telegram-Openwrt-Builder.git)
 cd Telegram-Openwrt-Builder
 ```
 
-#### 2. Instal Dependensi
-Pastikan Anda memiliki Python 3.10 atau lebih baru.
+**3. Instalasi Dependensi Python**
 ```bash
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
-#### 3. Konfigurasi Bot
-Edit file `config.py`. Isi semua nilai yang diperlukan:
+**4. Konfigurasi `config.py`**
+Buka file `config.py` dan isi semua variabel yang diperlukan, terutama:
+- `TELEGRAM_TOKEN`: Token bot Anda dari @BotFather.
+- `AUTHORIZED_USER_IDS`: User ID Telegram Anda (harus dalam format list, misal `[12345678]`).
+- `API_ID` & `API_HASH`: Diambil dari my.telegram.org untuk sesi Telethon.
 
-- `TELEGRAM_TOKEN`: Token bot dari `@BotFather`.
-- `AUTHORIZED_USER_IDS`: Daftar User ID Telegram Anda yang diizinkan menggunakan bot. Dapatkan ID Anda dari `@userinfobot`.
-- `API_ID` & `API_HASH`: Dapatkan dari [my.telegram.org](https://my.telegram.org)
-
----
-
-## ▶️ Menjalankan Bot
-
-Proses menjalankan bot terdiri dari dua tahap utama: otorisasi satu kali dan menjalankan secara permanen.
-
-#### Tahap 1: Otorisasi Telethon (Hanya Perlu Dilakukan Sekali)
-
-Sebelum menjalankan bot sebagai layanan, Anda harus melakukan login Telethon secara manual untuk membuat file sesi.
-
-1.  Jalankan skrip langsung dari terminal:
-    ```bash
-    python3 main.py
-    ```
-2.  Terminal akan meminta Anda untuk memasukkan kredensial:
-    - Masukkan **nomor telepon** Anda (format `+62...`).
-    - Masukkan **kode verifikasi** yang dikirim ke aplikasi Telegram Anda.
-    - Masukkan **password 2FA** jika Anda mengaktifkannya.
-3.  Setelah berhasil, file `telegram_user_session.session` akan dibuat. Anda bisa menghentikan skrip dengan `Ctrl + C`.
-
-#### Tahap 2: Menjalankan dengan PM2 (atau sebagai layanan lain)
-
-Setelah file `.session` ada, Anda bisa menjalankan bot secara permanen di latar belakang.
-
+**5. Login Sesi Telethon (Hanya untuk pertama kali)**
+Telethon memerlukan sesi login untuk fitur upload. Lakukan ini secara manual di terminal:
 ```bash
-pm2 start main.py --name bot-builder --interpreter python3
+# Hentikan bot jika sedang berjalan
+pm2 stop ST4Bot-builder
+
+# Hapus file sesi lama (jika ada) untuk memaksa login baru
+rm telegram_user_session.session
+
+# Jalankan bot secara langsung
+python3 main.py
+
+# Ikuti instruksi di terminal: masukkan nomor telepon, kode login, dan password 2FA
+# Setelah bot berhasil berjalan, hentikan dengan Ctrl + C
 ```
 
-Untuk melihat log:
+**6. Menjalankan Bot dengan PM2**
+Setelah sesi Telethon berhasil dibuat, jalankan bot di latar belakang.
 ```bash
-pm2 logs bot-builder
+# Mulai bot
+pm2 start main.py --name "ST4Bot-builder"
+
+# Melihat log
+pm2 logs ST4Bot-builder
+
+# Menghentikan bot
+pm2 stop ST4Bot-builder
 ```
 
 ---
 
-## 📖 Cara Penggunaan
+## 📖 Panduan Penggunaan
 
-- `/start` - Memulai bot dan menampilkan keyboard utama.
-- `/status` - Menampilkan semua konfigurasi yang sedang aktif dan status proses build saat ini.
-- `/settings` - Membuka menu pengaturan interaktif berbasis tombol.
-- `/build` - Memulai proses build dengan konfigurasi yang sedang aktif.
-- `/cancel` - Menghentikan paksa proses build yang sedang berjalan.
-- `/getlog` - Mengunduh file `build.log` dari build terakhir.
+- `/start`: Menampilkan pesan selamat datang dan keyboard perintah.
+- `/settings`: Masuk ke menu utama untuk mengatur semua parameter build.
+- `/build`: Memulai proses build interaktif.
+- `/upload_rootfs`: Memulai sesi untuk mengunggah file `rootfs` Amlogic.
+- `/upload_ipk`: Memulai sesi untuk mengunggah file `.ipk` kustom.
+- `/status`: Menampilkan panel konfigurasi dan status build saat ini.
+- `/arsip`: Melihat riwayat build yang telah selesai.
+- `/cleanup`: Mengelola atau membersihkan file build.
+- `/getlog`: Mengambil `build.log` dari proses build terakhir.
+- `/cancel`: Membatalkan proses build yang sedang berjalan.
 
 ---
 
-## 📜 Lisensi
+## 🏗️ Dikembangkan Oleh
 
-![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+Bot ini dikembangkan oleh **[ST4NGKUDUT](https://t.me/ST4NGKUDUT)** dengan bantuan dan sesi diskusi intensif bersama **Gemini Advanced**.
+
+## ⚖️ Lisensi
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg) ![License](https://img.shields.io/badge/License-MIT-green.svg)
