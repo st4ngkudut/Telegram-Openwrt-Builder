@@ -1,0 +1,137 @@
+# handlers/cleanup_handler.py
+
+import logging
+import os
+import glob
+import shutil
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters
+
+from .constants import CLEANUP_ALL_CONFIRM_1, AWAITING_DELETION_PHRASE
+from .utils import restricted, send_temporary_message
+# Import helper dari settings_handler yang sudah kita buat
+from .settings_handler import _save_menu_message_id 
+from config import AML_BUILD_SCRIPT_DIR, HISTORY_DB_PATH, BUILD_LOG_PATH, CONFIRMATION_PHRASE
+
+logger = logging.getLogger(__name__)
+
+@restricted
+async def start_full_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Memulai alur konfirmasi untuk menghapus semua data."""
+    query = update.callback_query
+    await query.answer()
+
+    await query.message.delete()
+    
+    ib_dirs = glob.glob("*imagebuilder-*/")
+    aml_dir = AML_BUILD_SCRIPT_DIR if os.path.isdir(AML_BUILD_SCRIPT_DIR) else None
+    
+    total_size = 0
+    for path in ib_dirs + ([aml_dir] if aml_dir else []):
+        for dirpath, dirnames, filenames in os.walk(path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                if os.path.exists(fp):
+                    total_size += os.path.getsize(fp)
+    
+    total_size_mb = total_size / (1024 * 1024)
+
+    text = (
+        "**PERINGATAN: AKSI INI TIDAK BISA DIURUNGKAN!**\n\n"
+        "Anda akan menghapus:\n"
+        f"- *{len(ib_dirs)}* direktori Image Builder\n"
+        f"- *{'1' if aml_dir else '0'}* direktori skrip Amlogic\n"
+        f"(Total estimasi ukuran: **{total_size_mb:.2f} MB**)\n"
+        "- File histori, konfigurasi, dan log.\n\n"
+        "Anda yakin?"
+    )
+    keyboard = [
+        [InlineKeyboardButton("✅ Ya, saya mengerti risikonya", callback_data="cleanup_all_confirm_yes")],
+        [InlineKeyboardButton("❌ Batal", callback_data="cleanup_all_cancel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    sent_message = await context.bot.send_message(chat_id=query.message.chat_id, text=text, parse_mode='Markdown', reply_markup=reply_markup)
+    await _save_menu_message_id(sent_message, context)
+    
+    return CLEANUP_ALL_CONFIRM_1
+
+@restricted
+async def prompt_for_final_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Meminta pengguna mengetik frasa konfirmasi akhir."""
+    query = update.callback_query
+    await query.answer()
+
+    text = (
+        "**KONFIRMASI FINAL**\n\n"
+        "Untuk melanjutkan penghapusan total, silakan ketik kalimat berikut persis (termasuk huruf kecil):\n\n"
+        f"`{CONFIRMATION_PHRASE}`"
+    )
+
+    await query.edit_message_text(text, parse_mode='Markdown', reply_markup=None)
+    
+    return AWAITING_DELETION_PHRASE
+
+@restricted
+async def execute_full_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Menjalankan proses penghapusan total setelah konfirmasi frasa."""
+    chat_id = update.effective_chat.id
+    # Dapatkan ID pesan prompt dari user_data
+    prompt_message_id = context.user_data.pop('settings_menu_id', None)
+    
+    await update.message.delete()
+
+    status_message = None
+    if prompt_message_id:
+        status_message = await context.bot.edit_message_text(chat_id=chat_id, message_id=prompt_message_id, text="⚙️ Memulai proses pembersihan total...")
+    else:
+        status_message = await context.bot.send_message(chat_id, "⚙️ Memulai proses pembersihan total...")
+
+    ib_dirs = glob.glob("*imagebuilder-*/")
+    for d in ib_dirs:
+        try:
+            shutil.rmtree(d)
+            logger.info(f"Direktori {d} dihapus.")
+        except Exception as e:
+            logger.error(f"Gagal menghapus {d}: {e}")
+
+    if os.path.isdir(AML_BUILD_SCRIPT_DIR):
+        try:
+            shutil.rmtree(AML_BUILD_SCRIPT_DIR)
+            logger.info(f"Direktori {AML_BUILD_SCRIPT_DIR} dihapus.")
+        except Exception as e:
+            logger.error(f"Gagal menghapus {AML_BUILD_SCRIPT_DIR}: {e}")
+            
+    files_to_delete = [HISTORY_DB_PATH, BUILD_LOG_PATH, 'state.json']
+    for f in files_to_delete:
+        if os.path.exists(f):
+            try:
+                os.remove(f)
+                logger.info(f"File {f} dihapus.")
+            except Exception as e:
+                logger.error(f"Gagal menghapus {f}: {e}")
+    
+    await status_message.edit_text("✅ Semua data build, histori, dan konfigurasi telah berhasil dihapus.")
+    context.job_queue.run_once(
+        lambda ctx: ctx.bot.delete_message(chat_id=chat_id, message_id=status_message.message_id),
+        config.TEMP_MESSAGE_DURATION
+    )
+
+    return ConversationHandler.END
+
+@restricted
+async def invalid_confirmation_phrase(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Menangani jika pengguna salah memasukkan frasa konfirmasi."""
+    from .settings_handler import _delete_old_menu
+    await update.message.delete()
+    await send_temporary_message(context, update.effective_chat.id, "❌ Frasa konfirmasi salah. Proses pembersihan dibatalkan demi keamanan.")
+    await _delete_old_menu(context)
+    return ConversationHandler.END
+
+@restricted
+async def cancel_full_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Membatalkan proses pembersihan total."""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("Proses pembersihan total dibatalkan.")
+    return ConversationHandler.END
