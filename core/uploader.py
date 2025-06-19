@@ -12,6 +12,7 @@ import config
 logger = logging.getLogger(__name__)
 
 async def upload_file_for_forwarding(file_path: str, destination_id, status_message) -> 'Message' or None:
+    # Buat instance client di dalam fungsi async untuk stabilitas
     client = TelegramClient('telegram_user_session', config.API_ID, config.API_HASH)
     
     try:
@@ -49,9 +50,10 @@ async def upload_file_for_forwarding(file_path: str, destination_id, status_mess
             except Exception:
                 # Abaikan error lain pada progress, yang penting upload jalan terus
                 pass
-        
+
         logger.info("Mencoba koneksi Telethon dengan timeout 30 detik...")
         try:
+            # Menggunakan client.start() dengan timeout, lebih andal daripada async with
             await asyncio.wait_for(client.start(), timeout=30.0)
             logger.info("Koneksi Telethon berhasil dibuat.")
             
