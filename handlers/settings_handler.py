@@ -302,7 +302,7 @@ async def aml_menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     prompts = {'url': "Kirim URL ke `rootfs.img.gz` atau `.xz`.", 'board': "Kirim nama `BOARD` (contoh: hk1box).", 'rootfs': "Kirim ukuran RootFS baru dalam MB:", 'leech': "Kirim ID Grup/Channel atau 'me':", 'kernel': "Kirim Versi Kernel (contoh: 5.15.y):", 'kernel_tag': "Kirim Tag Kernel (e.g., stable, flippy):", 'builder_name': "Kirim Nama Builder Anda:"}
     states = {'url': AWAITING_AML_ROOTFS_URL, 'board': AWAITING_AML_BOARD, 'rootfs': AWAITING_AML_ROOTFS_SIZE, 'leech': AWAITING_LEECH_DEST_AML, 'kernel': AWAITING_AML_KERNEL, 'kernel_tag': AWAITING_AML_KERNEL_TAG, 'builder_name': AWAITING_AML_BUILDER_NAME}
     if route in prompts:
-        await prompt_message.edit_message_text(prompts[route], parse_mode='Markdown'); return states[route]
+        await context.bot.edit_message_text(text=prompts[route], chat_id=prompt_message.chat_id, message_id=prompt_message.message_id, parse_mode='Markdown'); return states[route]
     await prompt_message.delete(); return AML_MENU
 
 async def toggle_aml_auto_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
